@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { Routes, Route, useNavigate, Link, useLocation } from 'react-router-dom';
+import { Routes, Route, useNavigate, Link, useLocation, useParams } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import './App.css'
 import { format } from 'date-fns';
@@ -69,7 +69,7 @@ function AuthPage() {
   };
 
   if (showForgot) {
-    return (
+  return (
       <div className="auth-container">
         <div className="auth-box">
           <img src="/Eventmories-logo.svg" alt="Eventmories Logo" className="auth-logo" />
@@ -134,7 +134,7 @@ function AuthPage() {
               <span>Don't have an account?</span> <a href="#" onClick={e => { e.preventDefault(); setIsSignUp(true); }}>Sign up</a>
             </>
           )}
-        </div>
+      </div>
       </div>
     </div>
   );
@@ -152,7 +152,16 @@ function SidebarMenuPopup({ open, onClose, onThemeChange, theme, onLogout }) {
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <div style={{ position: 'fixed', left: 80, bottom: 70, zIndex: 2000 }}>
+    <div
+      style={{
+        position: 'fixed',
+        left: window.innerWidth < 700 ? 'auto' : 80,
+        right: window.innerWidth < 700 ? 30 : 'auto',
+        bottom: window.innerWidth < 700 ? 'auto' : 70,
+        zIndex: 2000,
+        marginTop: 5,
+      }}
+    >
       <div ref={ref} style={{ minWidth: 220, background: '#fff', borderRadius: 18, boxShadow: '0 4px 32px rgba(0,0,0,0.10)', padding: 0, overflow: 'hidden', border: '1px solid #eee' }}>
         <div style={{ padding: '18px 20px 10px 20px', borderBottom: '1px solid #f0f0f0', fontWeight: 700, fontSize: 16, color:'#000' }}>Appearance</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '16px 20px 18px 20px', borderBottom: '1px solid #f0f0f0' }}>
@@ -161,7 +170,7 @@ function SidebarMenuPopup({ open, onClose, onThemeChange, theme, onLogout }) {
             onClick={() => onThemeChange('light')}
           >
             <img src="/light.svg" alt="Light" style={{ width: 20, height: 20, verticalAlign: 'middle' }} />
-          </button>
+        </button>
           <button
             style={{ flex: 1, background: theme === 'dark' ? '#FBD157' : '#f8f8f8', color: '#222', border: 'none', borderRadius: 10, padding: '10px 0', fontWeight: 600, fontSize: 15, cursor: 'pointer', outline:'none' }}
             onClick={() => onThemeChange('dark')}
@@ -174,7 +183,7 @@ function SidebarMenuPopup({ open, onClose, onThemeChange, theme, onLogout }) {
           >
             <span role="img" aria-label="Auto">Auto</span>
           </button>
-        </div>
+      </div>
         <button
           style={{ width: '100%', background: 'none', border: 'none', color: '#d32f2f', fontWeight: 700, fontSize: 16, padding: '18px 0', cursor: 'pointer' }}
           onClick={onLogout}
@@ -186,11 +195,39 @@ function SidebarMenuPopup({ open, onClose, onThemeChange, theme, onLogout }) {
   );
 }
 
+// UserAvatar: displays avatar, initials, or Google avatar
+function UserAvatar({ src, name, size = 38, style = {} }) {
+  if (src) {
+    return <img src={src} alt={name} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', background: '#FBD157', ...style }} />;
+  }
+  // Fallback: initials
+  return (
+    <div style={{ width: size, height: size, borderRadius: '50%', background: '#FBD157', color: '#222', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: size * 0.45, ...style }}>
+      {getInitials(name)}
+    </div>
+  );
+}
+
 function Sidebar() {
   const location = useLocation();
   const [showMenu, setShowMenu] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'auto');
+  const [profile, setProfile] = useState(null);
+  const [user, setUser] = useState(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUser(data?.user || null));
+  }, []);
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => setProfile(data));
+  }, [user]);
 
   useEffect(() => {
     function applyTheme(t) {
@@ -215,6 +252,10 @@ function Sidebar() {
     window.location.reload();
   };
 
+  // Get avatar src: profile.avatar_url, Google avatar, or null
+  let avatarSrc = profile?.avatar_url || user?.user_metadata?.avatar_url || null;
+  let displayName = profile?.name || user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'User';
+
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
@@ -234,7 +275,7 @@ function Sidebar() {
           <img src="/notification.svg" alt="Notifications" width={28} height={28} />
         </Link>
         <Link to="/profile" className={`sidebar-icon${location.pathname === '/profile' ? ' active' : ''}`} title="Profile">
-          <img src="/profile.svg" alt="Profile" width={28} height={28} />
+          <UserAvatar src={avatarSrc} name={displayName} size={32} />
         </Link>
       </nav>
       <div className="sidebar-bottom">
@@ -432,13 +473,7 @@ function SearchPage() {
                     <div className="search-result-content">
                       <div className="search-result-header">
                         <div className="search-result-user">
-                          {post.user_pic ? (
-                            <img src={post.user_pic} alt={post.user_name} className="search-result-avatar" />
-                          ) : (
-                            <div className="search-result-avatar-fallback">
-                              {getInitials(post.user_name)}
-                            </div>
-                          )}
+                          <UserAvatar src={post.user_pic} name={post.user_name} size={32} />
                           <div className="search-result-user-info">
                             <div className="search-result-username">{post.user_name}</div>
                             <div className="search-result-feed">in {post.feeds.name}</div>
@@ -720,15 +755,11 @@ function CommentModal({ open, onClose, post, user }) {
             ) : (
               comments.map(c => (
                 <div key={c.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 14 }}>
-                  {c.user_pic ? (
-                    <img src={c.user_pic} alt={c.user_name} style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }} />
-                  ) : (
-                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#FBD157', color: '#222', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13 }}>
-                      {getInitials(c.user_name)}
-                    </div>
-                  )}
+                  <Link to={c.user_id === user.id ? '/profile' : `/profile/${c.user_id}`} style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+                    <UserAvatar src={c.user_pic} name={c.user_name} size={32} />
+                  </Link>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, color: '#222', textAlign:'left', fontSize: 14 }}>{c.user_name}</div>
+                    <Link to={c.user_id === user.id ? '/profile' : `/profile/${c.user_id}`} style={{ fontWeight: 600, color: '#222', textAlign:'left', fontSize: 14, textDecoration: 'none' }}>{c.user_name}</Link>
                     <div style={{ color: '#888', textAlign:'left', fontSize: 12 }}>{new Date(c.created_at).toLocaleString()}</div>
                     <div style={{ color: '#222', textAlign:'left', fontSize: 15, marginTop: 2 }}>{c.content}</div>
                   </div>
@@ -770,6 +801,19 @@ function FeedPage({ user }) {
   const [commentPost, setCommentPost] = useState(null);
   const [showFeedsDropdown, setShowFeedsDropdown] = useState(false);
   const postsListRef = useRef();
+  const [profile, setProfile] = useState(null);
+  const [saveStatus, setSaveStatus] = useState({});
+
+  // Fetch user profile for latest avatar
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => setProfile(data));
+  }, [user]);
 
   // Get feed ID from URL parameters
   const urlParams = new URLSearchParams(window.location.search);
@@ -837,9 +881,23 @@ function FeedPage({ user }) {
         });
         setLikeCounts(counts);
         setLikeStatus(status);
+        // Fetch saves for all posts
+        const { data: savesData } = await supabase
+          .from('post_saves')
+          .select('post_id, user_id')
+          .in('post_id', postIds);
+        const saveStatusObj = {};
+        postIds.forEach(id => {
+          saveStatusObj[id] = false;
+        });
+        (savesData || []).forEach(save => {
+          if (save.user_id === user.id) saveStatusObj[save.post_id] = true;
+        });
+        setSaveStatus(saveStatusObj);
       } else {
         setLikeCounts({});
         setLikeStatus({});
+        setSaveStatus({});
       }
     }
     fetchPostsAndLikes();
@@ -866,11 +924,12 @@ function FeedPage({ user }) {
     let image_url = null;
     let video_url = null;
     const userName =
+      profile?.name ||
       user.user_metadata?.full_name ||
       user.user_metadata?.name ||
       user.email?.split('@')[0] ||
       'User';
-    const userPic = user.user_metadata?.avatar_url || null;
+    const userPic = profile?.avatar_url || user.user_metadata?.avatar_url || null;
 
     // Upload image if present
     if (image) {
@@ -965,6 +1024,22 @@ function FeedPage({ user }) {
     setLikeStatus(likeStatus => ({ ...likeStatus, [postId]: !liked }));
   }
 
+  // Toggle save/bookmark
+  async function handleToggleSave(postId) {
+    const saved = saveStatus[postId];
+    if (saved) {
+      await supabase.from('post_saves').delete().eq('post_id', postId).eq('user_id', user.id);
+    } else {
+      await supabase.from('post_saves').insert([{ post_id: postId, user_id: user.id }]);
+    }
+    // Refresh saves for this post
+    const { data: savesData } = await supabase
+      .from('post_saves')
+      .select('post_id, user_id')
+      .eq('post_id', postId);
+    setSaveStatus(saveStatus => ({ ...saveStatus, [postId]: !saved }));
+  }
+
   // TODO: Comment, save logic
 
   return (
@@ -1044,6 +1119,8 @@ function FeedPage({ user }) {
                         console.log('FeedPage: Opening comment modal for post:', post.id);
                         setCommentPost(post);
                       }}
+                      onToggleSave={() => handleToggleSave(post.id)}
+                      saved={!!saveStatus[post.id]}
                       id={`feed-post-${post.id}`}
                     />
                   ))
@@ -1078,20 +1155,30 @@ function FeedPage({ user }) {
   );
 }
 
-function FeedPostItem({ post, user, onDelete, onToggleLike, liked, likeCount, onComment, id }) {
+function FeedPostItem({ post, user, onDelete, onToggleLike, liked, likeCount, onComment, id, onToggleSave, saved, feedId }) {
   // Use poster info from post, fallback to user metadata if it's the current user's post
+  const [profile, setProfile] = useState(null);
+  useEffect(() => {
+    if (post.user_id === user.id) {
+      supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+        .then(({ data }) => setProfile(data));
+    }
+  }, [post.user_id, user.id]);
+
   let posterName = post.user_name;
   let posterPic = post.user_pic;
-
-  // If post is by the current user and no name/pic on post, use user metadata
   if (post.user_id === user.id) {
-    posterName =
-      posterName ||
+    posterName = profile?.name ||
+      post.user_name ||
       user.user_metadata?.full_name ||
       user.user_metadata?.name ||
       user.email?.split('@')[0] ||
       'User';
-    posterPic = posterPic || user.user_metadata?.avatar_url || null;
+    posterPic = profile?.avatar_url || post.user_pic || user.user_metadata?.avatar_url || null;
   } else {
     posterName = posterName || 'User';
     posterPic = posterPic || null;
@@ -1134,43 +1221,35 @@ function FeedPostItem({ post, user, onDelete, onToggleLike, liked, likeCount, on
     fetchCommentCount();
   }, [post.id]);
 
+  const navigate = useNavigate ? useNavigate() : null;
+
+  // Only make the main post area clickable, not the action buttons
+  const handleNavigateToFeed = (e) => {
+    // Prevent navigation if clicking on a button or link
+    if (
+      e.target.closest('.feed-post-action-btn') ||
+      e.target.tagName === 'BUTTON' ||
+      e.target.tagName === 'A' ||
+      e.target.closest('button')
+    ) return;
+    if (navigate && post.feed_id && post.id) {
+      navigate(`/feed?feedId=${post.feed_id}&postId=${post.id}`);
+    } else {
+      window.location.href = `/feed?feedId=${post.feed_id}&postId=${post.id}`;
+    }
+  };
+
   return (
-    <div className="feed-post-item" id={id}>
+    <div className="feed-post-item" id={id} style={{ cursor: feedId ? 'pointer' : 'default' }} onClick={feedId ? handleNavigateToFeed : undefined}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {posterPic ? (
-            <img
-              src={posterPic}
-              alt={posterName}
-              style={{
-                width: 38,
-                height: 38,
-                borderRadius: '50%',
-                objectFit: 'cover',
-              }}
-            />
-          ) : (
-            <div
-              style={{
-                width: 38,
-                height: 38,
-                borderRadius: '50%',
-                background: '#FBD157',
-                color: '#222',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 700,
-                fontSize: 18,
-              }}
-            >
-              {getInitials(posterName)}
+          <Link to={post.user_id === user.id ? '/profile' : `/profile/${post.user_id}`} style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
+            <UserAvatar src={posterPic} name={posterName} size={38} />
+            <div>
+              <div style={{ fontWeight: 600, color: '#222', textAlign:'start' }}>{posterName}</div>
+              <div style={{ color: '#aaa', fontSize: 13 }}>{dateString}</div>
             </div>
-          )}
-          <div>
-            <div style={{ fontWeight: 600, color: '#222', textAlign:'start' }}>{posterName}</div>
-            <div style={{ color: '#aaa', fontSize: 13 }}>{dateString}</div>
-          </div>
+          </Link>
         </div>
         {isOwner && (
           <div style={{ position: 'relative' }}>
@@ -1216,8 +1295,10 @@ function FeedPostItem({ post, user, onDelete, onToggleLike, liked, likeCount, on
           alignItems: 'center',
           marginTop: 8,
         }}
+        onClick={e => e.stopPropagation()} // Prevent action bar clicks from triggering navigation
       >
         <span
+          className="feed-post-action-btn"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -1241,6 +1322,7 @@ function FeedPostItem({ post, user, onDelete, onToggleLike, liked, likeCount, on
           {likeCount}
         </span>
         <span
+          className="feed-post-action-btn"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -1268,11 +1350,12 @@ function FeedPostItem({ post, user, onDelete, onToggleLike, liked, likeCount, on
           {commentCount}
         </span>
         <span
+          className="feed-post-action-btn"
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: 4,
-            color: '#888',
+            color: saved ? '#FBD157' : '#888',
             fontSize: 15,
             cursor: 'pointer',
             userSelect: 'none',
@@ -1283,15 +1366,15 @@ function FeedPostItem({ post, user, onDelete, onToggleLike, liked, likeCount, on
             minWidth: '44px',
             justifyContent: 'center'
           }}
-          onMouseEnter={(e) => e.target.style.background = '#f0f0f0'}
-          onMouseLeave={(e) => e.target.style.background = 'transparent'}
+          onClick={onToggleSave}
+          onMouseEnter={e => e.target.style.background = '#f0f0f0'}
+          onMouseLeave={e => e.target.style.background = 'transparent'}
         >
           <img
-            src="/save.svg"
+            src={saved ? "/save-filled.svg" : "/save.svg"}
             alt="save"
             style={{ width: 20, height: 20, display: 'inline-block' }}
-          />{' '}
-          0
+          />
         </span>
       </div>
     </div>
@@ -1385,7 +1468,7 @@ function NotificationsPage() {
                 }}
                 onClick={() => handleNotificationClick(n)}
               >
-                <img src={n.from_user_pic || '/profile.svg'} alt="avatar" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', background: '#FBD157' }} />
+                <UserAvatar src={n.from_user_pic || '/profile.svg'} name={n.from_user_name || 'Someone'} size={36} />
                 <div style={{ flex: 1, textAlign: 'left', color:'#000' }}>
                   {renderMessage(n)}
                   <div style={{ color: '#888', fontSize: 13, marginTop: 2 }}>{new Date(n.created_at).toLocaleString()}</div>
@@ -1399,13 +1482,333 @@ function NotificationsPage() {
   );
 }
 
-function ProfilePage() {
+// Add a ProfileEditModal component
+function ProfileEditModal({ open, form, avatarUrl, onChange, onAvatarChange, onSave, onCancel, saving }) {
+  if (!open) return null;
   return (
-    <div className="feed-layout">
-      <div className="feed-main" style={{ margin: 'auto', textAlign: 'center' }}>
-        <h2>Profile</h2>
-        <p>Your profile details will appear here.</p>
+    <div className="modal-backdrop" style={{ zIndex: 1000 }}>
+      <div className="modal-box" style={{ minWidth: 340, maxWidth: 420, padding: 0, overflow: 'hidden', borderRadius: 20, background: '#fff', maxHeight:'100vh'}}>
+        <div style={{ padding: 32, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
+          <div style={{ position: 'relative', marginBottom: 8 }}>
+            <UserAvatar src={avatarUrl || '/profile.svg'} name={form.name || 'User'} size={110} />
+            <label htmlFor="avatar-upload" style={{ position: 'absolute', right: 0, bottom: 0, background: '#FBD157', borderRadius: '50%', padding: 6, display: 'flex', justifyContent: 'center', cursor: 'pointer', border: '2px solid #fff' }}>
+              <img src="/image.svg" alt="Edit" style={{ width: 24, height: 24 }} />
+              <input id="avatar-upload" type="file" accept="image/*" style={{ display: 'none' }} onChange={onAvatarChange} />
+            </label>
+          </div>
+          <input
+            name="name"
+            value={form.name}
+            onChange={onChange}
+            style={{ fontWeight: 700, fontSize: 28, textAlign: 'center', border: '1.5px solid #000', marginBottom: 8, background: 'transparent', outline: 'none', color: '#000', width: '100%' }}
+            maxLength={40}
+            placeholder="Name"
+          />
+          <div style={{ display: 'flex', gap: 18, color: '#888', fontSize: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
+            {['instagram', 'linkedin', 'twitter'].map(social => (
+              <input
+                key={social}
+                name={social}
+                value={form[social]}
+                onChange={onChange}
+                placeholder={social.charAt(0).toUpperCase() + social.slice(1)}
+                style={{ border: '1.5px solid #000', background: 'transparent', outline: 'none', color: 'var(--text)', fontSize: 15, width: 120, marginRight: 8 }}
+                maxLength={40}
+              />
+            ))}
+          </div>
+          <textarea
+            name="bio"
+            value={form.bio}
+            onChange={onChange}
+            placeholder="Bio"
+            rows={2}
+            style={{ width: '100%', border: '1.5px solid #000', borderRadius: 8, padding: 8, fontSize: 15, background: 'transparent', color: '#000', resize: 'none' }}
+            maxLength={160}
+          />
+          <div style={{ display: 'flex', gap: 16, marginTop: 12, width: '100%', justifyContent: 'flex-end' }}>
+            <button className="feed-post-btn" style={{ background: '#eee', color: '#222' }} onClick={onCancel} disabled={saving}>Cancel</button>
+            <button className="feed-post-btn" style={{ background: '#FBD157', color: '#222' }} onClick={onSave} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
+          </div>
+        </div>
       </div>
+    </div>
+  );
+}
+
+function ProfilePage() {
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [editMode, setEditMode] = useState(false);
+  const [form, setForm] = useState({ name: '', bio: '', instagram: '', linkedin: '', twitter: '' });
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [tab, setTab] = useState('posts');
+  const [posts, setPosts] = useState([]);
+  const [likes, setLikes] = useState([]);
+  const [bookmarks, setBookmarks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [likeCounts, setLikeCounts] = useState({});
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUser(data?.user || null));
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    async function fetchProfile() {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      setProfile(data);
+      setForm({
+        name: data?.name || '',
+        bio: data?.bio || '',
+        instagram: data?.instagram || '',
+        linkedin: data?.linkedin || '',
+        twitter: data?.twitter || ''
+      });
+      setAvatarUrl(data?.avatar_url || '');
+      setLoading(false);
+    }
+    fetchProfile();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    // Fetch posts by user
+    async function fetchPosts() {
+      const { data } = await supabase
+        .from('posts')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      setPosts(data || []);
+      if (data && data.length) {
+        // Fetch like counts for these posts
+        const postIds = data.map(p => p.id);
+        const { data: likesData } = await supabase
+          .from('post_likes')
+          .select('post_id')
+          .in('post_id', postIds);
+        const counts = {};
+        postIds.forEach(id => {
+          counts[id] = (likesData || []).filter(l => l.post_id === id).length;
+        });
+        setLikeCounts(counts);
+      } else {
+        setLikeCounts({});
+      }
+    }
+    // Fetch liked posts
+    async function fetchLikes() {
+      const { data: likesData } = await supabase
+        .from('post_likes')
+        .select('post_id')
+        .eq('user_id', user.id);
+      const postIds = (likesData || []).map(l => l.post_id);
+      if (postIds.length) {
+        const { data: likedPosts } = await supabase
+          .from('posts')
+          .select('*')
+          .in('id', postIds)
+          .order('created_at', { ascending: false });
+        setLikes(likedPosts || []);
+        // Fetch like counts for these posts
+        const { data: likesDataAll } = await supabase
+          .from('post_likes')
+          .select('post_id')
+          .in('post_id', postIds);
+        const counts = {};
+        postIds.forEach(id => {
+          counts[id] = (likesDataAll || []).filter(l => l.post_id === id).length;
+        });
+        setLikeCounts(lc => ({ ...lc, ...counts }));
+      } else {
+        setLikes([]);
+      }
+    }
+    // Fetch bookmarks (saved posts)
+    async function fetchBookmarks() {
+      const { data: savedData } = await supabase
+        .from('post_saves')
+        .select('post_id')
+        .eq('user_id', user.id);
+      const postIds = (savedData || []).map(s => s.post_id);
+      if (postIds.length) {
+        const { data: savedPosts } = await supabase
+          .from('posts')
+          .select('*')
+          .in('id', postIds)
+          .order('created_at', { ascending: false });
+        setBookmarks(savedPosts || []);
+        // Fetch like counts for these posts
+        const { data: likesDataAll } = await supabase
+          .from('post_likes')
+          .select('post_id')
+          .in('post_id', postIds);
+        const counts = {};
+        postIds.forEach(id => {
+          counts[id] = (likesDataAll || []).filter(l => l.post_id === id).length;
+        });
+        setLikeCounts(lc => ({ ...lc, ...counts }));
+      } else {
+        setBookmarks([]);
+      }
+    }
+    fetchPosts();
+    fetchLikes();
+    fetchBookmarks();
+  }, [user]);
+
+  const handleEdit = () => setEditMode(true);
+  const handleCancel = () => {
+    setEditMode(false);
+    setForm({
+      name: profile?.name || '',
+      bio: profile?.bio || '',
+      instagram: profile?.instagram || '',
+      linkedin: profile?.linkedin || '',
+      twitter: profile?.twitter || ''
+    });
+    setAvatarFile(null);
+    setAvatarUrl(profile?.avatar_url || '');
+  };
+  const handleChange = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
+  const handleAvatarChange = e => {
+    if (e.target.files && e.target.files[0]) {
+      setAvatarFile(e.target.files[0]);
+      setAvatarUrl(URL.createObjectURL(e.target.files[0]));
+    }
+  };
+  const handleSave = async () => {
+    setSaving(true);
+    let newAvatarUrl = profile?.avatar_url || '';
+    if (avatarFile) {
+      const fileExt = avatarFile.name.split('.').pop();
+      const filePath = `avatars/${user.id}_${Date.now()}.${fileExt}`;
+      // Remove previous avatar if needed (optional)
+      // await supabase.storage.from('avatars').remove([profile?.avatar_url]);
+      const { error: uploadErr } = await supabase.storage.from('avatars').upload(filePath, avatarFile, { upsert: true });
+      if (!uploadErr) {
+        const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
+        newAvatarUrl = data.publicUrl;
+      } else {
+        alert('Failed to upload avatar.');
+        setSaving(false);
+        return;
+      }
+    }
+    const { error } = await supabase
+      .from('user_profiles')
+      .upsert({
+        id: user.id,
+        name: form.name,
+        bio: form.bio,
+        instagram: form.instagram,
+        linkedin: form.linkedin,
+        twitter: form.twitter,
+        avatar_url: newAvatarUrl,
+        updated_at: new Date().toISOString()
+      });
+    if (!error) {
+      // Re-fetch profile to ensure latest avatar is loaded
+      const { data: updatedProfile } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      setProfile(updatedProfile);
+      setAvatarUrl(updatedProfile?.avatar_url || '');
+      setEditMode(false);
+      setAvatarFile(null);
+    }
+    setSaving(false);
+  }
+
+  if (loading) return <div className="feed-layout"><div className="feed-main" style={{ margin: 'auto', textAlign: 'center' }}>Loading...</div></div>;
+  if (!user) return <div className="feed-layout"><div className="feed-main" style={{ margin: 'auto', textAlign: 'center' }}>Not signed in.</div></div>;
+
+  return (
+    <div style={{ minHeight: '80vh', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 0, background: 'var(--bg)' }}>
+      <div className="profile-card" style={{ minWidth:420, maxWidth: 720, margin: '20px auto', background: 'var(--card)', borderRadius: 24, border: '1.5px solid #727272', padding: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', minHeight: 320 }}>
+        <div style={{ position: 'relative', marginBottom: 18 }}>
+          <UserAvatar src={avatarUrl || '/profile.svg'} name={profile?.name || user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'User'} size={window.innerWidth < 500 ? 70 : 110} />
+        </div>
+        <div style={{ fontWeight: 700, fontSize: window.innerWidth < 500 ? 18 : 28, color: '#000', marginBottom: 8 }}>{profile?.name || 'No Name'}</div>
+        <div style={{ display: 'flex', gap: window.innerWidth < 500 ? 8 : 18, marginBottom: 10, color: '#888', fontSize: window.innerWidth < 500 ? 13 : 16, flexWrap: 'wrap', justifyContent: 'center' }}>
+          {['instagram', 'linkedin', 'twitter'].map(social => (
+            profile?.[social] && <a key={social} href={profile[social]} target="_blank" rel="noopener noreferrer" style={{ color: '#888', textDecoration: 'none', fontWeight: 500 }}>{social.charAt(0).toUpperCase() + social.slice(1)}</a>
+          ))}
+        </div>
+        <div style={{ color: '#666', fontSize: window.innerWidth < 500 ? 13 : 16, marginBottom: 12, textAlign: 'center', minHeight: 24 }}>{profile?.bio || 'No bio yet.'}</div>
+        <div style={{ display: 'flex', gap: window.innerWidth < 500 ? 8 : 18, marginBottom: window.innerWidth < 500 ? 10 : 18, borderBottom: '1.5px solid #FBD157', width: '100%', justifyContent:'space-evenly' }}>
+          {['posts', 'likes', 'bookmarks'].map(t => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              style={{ background: 'none', borderRadius: 0, border: 'none', fontWeight: 600, fontSize: window.innerWidth < 500 ? 14 : 17, color: tab === t ? '#000' : '#888', borderBottom: tab === t ? '3px solid #FBD157' : 'none', padding: window.innerWidth < 500 ? '6px 0' : '8px 0', cursor: 'pointer', outline: 'none' }}
+            >
+              {t === 'posts' ? 'My posts' : t.charAt(0).toUpperCase() + t.slice(1)}
+            </button>
+          ))}
+        </div>
+        <div className="hide-scrollbar" style={{ width: '100%', minHeight: 480, maxHeight: window.innerWidth < 500 ? 120 : 400, overflowY: 'auto', marginBottom: 8 }}>
+          {tab === 'posts' && posts.map(post => (
+            <FeedPostItem key={post.id} post={post} user={user} likeCount={likeCounts[post.id] || 0} feedId={post.feed_id} />
+          ))}
+          {tab === 'likes' && likes.map(post => (
+            <FeedPostItem key={post.id} post={post} user={user} likeCount={likeCounts[post.id] || 0} liked={true} feedId={post.feed_id} />
+          ))}
+          {tab === 'bookmarks' && bookmarks.map(post => (
+            <FeedPostItem key={post.id} post={post} user={user} likeCount={likeCounts[post.id] || 0} saved={true} onToggleSave={() => {}} feedId={post.feed_id} />
+          ))}
+          {(['posts','likes','bookmarks'].map((t, i) => tab === t && [posts, likes, bookmarks][i].length === 0 ? (
+            <div key={t} style={{ color: '#bbb', textAlign: 'center', marginTop: 32 }}>No posts yet.</div>
+          ) : null))}
+        </div>
+      </div>
+      {/* Floating edit button outside the card */}
+      {!editMode && (
+        <button
+          className="profile-edit-fab"
+          style={{
+            position: 'fixed',
+            right: window.innerWidth < 500 ? 12 : 32,
+            bottom: window.innerWidth < 500 ? 12 : 32,
+            width: window.innerWidth < 500 ? 40 : 48,
+            height: window.innerWidth < 500 ? 40 : 48,
+            borderRadius: '50%',
+            background: '#FBD157',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.10)',
+            border: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            zIndex: 3000
+          }}
+          onClick={handleEdit}
+          title="Edit Profile"
+        >
+          <img src="/pen.svg" alt="Edit" style={{ width: window.innerWidth < 500 ? 20 : 24, height: window.innerWidth < 500 ? 20 : 24 }} />
+        </button>
+      )}
+      {/* Profile edit modal */}
+      <ProfileEditModal
+        open={editMode}
+        form={form}
+        avatarUrl={avatarUrl}
+        onChange={handleChange}
+        onAvatarChange={handleAvatarChange}
+        onSave={handleSave}
+        onCancel={handleCancel}
+        saving={saving}
+      />
     </div>
   );
 }
@@ -1505,7 +1908,7 @@ function CreateFeedModal({ open, onClose, onFeedCreated }) {
 
   return (
     <div className="modal-backdrop">
-      <div className="modal-box">
+      <div className="modal-box" style={{ padding:'32px 28px 24px', color:'#000', maxWidth: '320px' }}>
         {!createdFeed ? (
           <>
             <h2 style={{ marginBottom: 18, fontWeight: 700 }}>Create Feed</h2>
@@ -1591,7 +1994,7 @@ function JoinFeedModal({ open, onClose, user }) {
 
   return (
     <div className="modal-backdrop">
-      <div className="modal-box">
+      <div className="modal-box" style={{padding:'32px 28px 24px', color:'#000', maxWidth: '320px' }}>
         <h2 style={{ marginBottom: 18, fontWeight: 700 }}>Join Feed</h2>
         <form onSubmit={handleJoin} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <input
@@ -1682,6 +2085,47 @@ function generateFeedCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
+function PublicProfilePage() {
+  const { id } = useParams();
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!id) return;
+    async function fetchProfile() {
+      setLoading(true);
+      const { data } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', id)
+        .single();
+      setProfile(data);
+      setLoading(false);
+    }
+    fetchProfile();
+  }, [id]);
+
+  if (loading) return <div className="feed-layout"><div className="feed-main" style={{ margin: 'auto', textAlign: 'center' }}>Loading...</div></div>;
+  if (!profile) return <div className="feed-layout"><div className="feed-main" style={{ margin: 'auto', textAlign: 'center' }}>User not found.</div></div>;
+
+  return (
+    <div style={{ minHeight: '80vh', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 0, background: 'var(--bg)' }}>
+      <div className="profile-card" style={{ maxWidth: 720, margin: '20px auto', background: 'var(--card)', borderRadius: 24, border: '1.5px solid #727272', padding: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', minHeight: 320 }}>
+        <div style={{ position: 'relative', marginBottom: 18 }}>
+          <UserAvatar src={profile?.avatar_url || '/profile.svg'} name={profile?.name || 'User'} size={window.innerWidth < 500 ? 70 : 110} />
+        </div>
+        <div style={{ fontWeight: 700, fontSize: window.innerWidth < 500 ? 18 : 28, color: '#000', marginBottom: 8 }}>{profile?.name || 'No Name'}</div>
+        <div style={{ display: 'flex', gap: window.innerWidth < 500 ? 8 : 18, marginBottom: 10, color: '#888', fontSize: window.innerWidth < 500 ? 13 : 16, flexWrap: 'wrap', justifyContent: 'center' }}>
+          {['instagram', 'linkedin', 'twitter'].map(social => (
+            profile?.[social] && <a key={social} href={profile[social]} target="_blank" rel="noopener noreferrer" style={{ color: '#888', textDecoration: 'none', fontWeight: 500 }}>{social.charAt(0).toUpperCase() + social.slice(1)}</a>
+          ))}
+        </div>
+        <div style={{ color: '#666', fontSize: window.innerWidth < 500 ? 13 : 16, marginBottom: 12, textAlign: 'center', minHeight: 24 }}>{profile?.bio || 'No bio yet.'}</div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [showSplash, setShowSplash] = useState(true);
   const [user, setUser] = useState(null);
@@ -1698,7 +2142,29 @@ function App() {
       setUser(session?.user || null);
     });
     // Get current user on mount
-    supabase.auth.getUser().then(({ data }) => setUser(data?.user || null));
+    supabase.auth.getUser().then(async ({ data }) => {
+      setUser(data?.user || null);
+      // Ensure user_profiles row exists
+      if (data?.user) {
+        const { data: profile, error } = await supabase
+          .from('user_profiles')
+          .select('id')
+          .eq('id', data.user.id)
+          .single();
+        if (!profile) {
+          // Insert a new profile row
+          await supabase.from('user_profiles').insert({
+            id: data.user.id,
+            name: data.user.user_metadata?.full_name || data.user.user_metadata?.name || data.user.email?.split('@')[0] || 'User',
+            avatar_url: data.user.user_metadata?.avatar_url || '',
+            bio: '',
+            instagram: '',
+            linkedin: '',
+            twitter: ''
+          });
+        }
+      }
+    });
     return () => {
       listener.subscription.unsubscribe();
     };
@@ -1715,6 +2181,7 @@ function App() {
         <Route path="/feed" element={user ? <FeedPage user={user} /> : <AuthPage />} />
         <Route path="/notifications" element={user ? <NotificationsPage /> : <AuthPage />} />
         <Route path="/profile" element={user ? <ProfilePage /> : <AuthPage />} />
+        <Route path="/profile/:id" element={user ? <PublicProfilePage /> : <AuthPage />} />
       </Routes>
     </div>
   );
