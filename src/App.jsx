@@ -1822,7 +1822,7 @@ function ProfilePage() {
 
 function HomePage({ user }) {
   // Always fetch latest name from user_profiles
-  const [profile, setProfile] = useState(undefined); // undefined = loading
+  const [profile, setProfile] = useState(undefined); // undefined when its loading
   useEffect(() => {
     let isMounted = true;
     async function fetchProfile() {
@@ -2110,7 +2110,7 @@ function SearchPanel({ open, onClose }) {
   );
 }
 
-// Utility to generate a 6-character alphanumeric code
+// generate a 6-character alphanumeric code
 function generateFeedCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
