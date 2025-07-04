@@ -656,6 +656,7 @@ function CommentModal({ open, onClose, post, user }) {
   const [loading, setLoading] = useState(false);
   const [newComment, setNewComment] = useState('');
   const [posting, setPosting] = useState(false);
+  const [commentProfiles, setCommentProfiles] = useState({});
 
   useEffect(() => {
     if (!open || !post) return;
@@ -673,6 +674,21 @@ function CommentModal({ open, onClose, post, user }) {
     }
     fetchComments();
   }, [open, post]);
+
+  useEffect(() => {
+    async function fetchProfiles() {
+      if (!comments.length) return;
+      const userIds = Array.from(new Set(comments.map(c => c.user_id)));
+      const { data } = await supabase
+        .from('user_profiles')
+        .select('id, name, avatar_url')
+        .in('id', userIds);
+      const map = {};
+      (data || []).forEach(p => { map[p.id] = p; });
+      setCommentProfiles(map);
+    }
+    fetchProfiles();
+  }, [comments]);
 
   async function handleAddComment(e) {
     e.preventDefault();
@@ -756,10 +772,10 @@ function CommentModal({ open, onClose, post, user }) {
               comments.map(c => (
                 <div key={c.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 14 }}>
                   <Link to={c.user_id === user.id ? '/profile' : `/profile/${c.user_id}`} style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-                    <UserAvatar src={c.user_pic} name={c.user_name} size={32} />
+                    <UserAvatar src={commentProfiles[c.user_id]?.avatar_url || c.user_pic} name={commentProfiles[c.user_id]?.name || c.user_name} size={32} />
                   </Link>
                   <div style={{ flex: 1 }}>
-                    <Link to={c.user_id === user.id ? '/profile' : `/profile/${c.user_id}`} style={{ fontWeight: 600, color: '#222', textAlign:'left', fontSize: 14, textDecoration: 'none' }}>{c.user_name}</Link>
+                    <Link to={c.user_id === user.id ? '/profile' : `/profile/${c.user_id}`} style={{ fontWeight: 600, color: '#222', textAlign:'left', fontSize: 14, textDecoration: 'none' }}>{commentProfiles[c.user_id]?.name || c.user_name}</Link>
                     <div style={{ color: '#888', textAlign:'left', fontSize: 12 }}>{new Date(c.created_at).toLocaleString()}</div>
                     <div style={{ color: '#222', textAlign:'left', fontSize: 15, marginTop: 2 }}>{c.content}</div>
                   </div>
@@ -1156,33 +1172,24 @@ function FeedPage({ user }) {
 }
 
 function FeedPostItem({ post, user, onDelete, onToggleLike, liked, likeCount, onComment, id, onToggleSave, saved, feedId }) {
-  // Use poster info from post, fallback to user metadata if it's the current user's post
-  const [profile, setProfile] = useState(null);
+  // Always fetch latest profile for post.user_id
+  const [profile, setProfile] = useState(undefined); // undefined means 'loading', null means 'not found'
   useEffect(() => {
-    if (post.user_id === user.id) {
-      supabase
+    let isMounted = true;
+    async function fetchProfile() {
+      const { data } = await supabase
         .from('user_profiles')
         .select('*')
-        .eq('id', user.id)
-        .single()
-        .then(({ data }) => setProfile(data));
+        .eq('id', post.user_id)
+        .single();
+      if (isMounted) setProfile(data ?? null);
     }
-  }, [post.user_id, user.id]);
+    fetchProfile();
+    return () => { isMounted = false; };
+  }, [post.user_id]);
 
-  let posterName = post.user_name;
-  let posterPic = post.user_pic;
-  if (post.user_id === user.id) {
-    posterName = profile?.name ||
-      post.user_name ||
-      user.user_metadata?.full_name ||
-      user.user_metadata?.name ||
-      user.email?.split('@')[0] ||
-      'User';
-    posterPic = profile?.avatar_url || post.user_pic || user.user_metadata?.avatar_url || null;
-  } else {
-    posterName = posterName || 'User';
-    posterPic = posterPic || null;
-  }
+  let posterName = (profile !== undefined && profile !== null) ? (profile.name || 'User') : (post.user_name || 'User');
+  let posterPic = (profile !== undefined && profile !== null) ? (profile.avatar_url || null) : (post.user_pic || null);
 
   const isOwner = post.user_id === user.id;
 
@@ -1814,8 +1821,22 @@ function ProfilePage() {
 }
 
 function HomePage({ user }) {
-  // Get first name from user metadata or email
-  const name = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'User';
+  // Always fetch latest name from user_profiles
+  const [profile, setProfile] = useState(undefined); // undefined = loading
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchProfile() {
+      const { data } = await supabase
+        .from('user_profiles')
+        .select('name')
+        .eq('id', user.id)
+        .single();
+      if (isMounted) setProfile(data ?? null);
+    }
+    fetchProfile();
+    return () => { isMounted = false; };
+  }, [user.id]);
+  const name = (profile !== undefined && profile !== null) ? (profile.name || 'User') : (user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'User');
   const hour = new Date().getHours();
   const greeting = (
     <span style={{ color: '#000', fontFamily: 'Work Sans, Arial, sans-serif' }}>
@@ -1825,6 +1846,15 @@ function HomePage({ user }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [showSearchPanel, setShowSearchPanel] = useState(false);
+
+  let displayName = 'User';
+  if (profile === undefined) {
+    displayName = '...'; // or 'User' or a spinner
+  } else if (profile !== null) {
+    displayName = profile.name || 'User';
+  } else {
+    displayName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'User';
+  }
 
   return (
     <div className="home-layout">
@@ -1844,7 +1874,7 @@ function HomePage({ user }) {
               fontFamily: "'Work Sans', Arial, sans-serif"
             }}
           >
-            {greeting}, {name.charAt(0).toUpperCase() + name.slice(1)}
+            {greeting}, {displayName.charAt(0).toUpperCase() + displayName.slice(1)}
           </h1>
           <h2
             style={{
@@ -2106,7 +2136,7 @@ function PublicProfilePage() {
   }, [id]);
 
   if (loading) return <div className="feed-layout"><div className="feed-main" style={{ margin: 'auto', textAlign: 'center' }}>Loading...</div></div>;
-  if (!profile) return <div className="feed-layout"><div className="feed-main" style={{ margin: 'auto', textAlign: 'center' }}>User not found.</div></div>;
+  if (!profile) return <div className="feed-layout"><div className="feed-main" style={{ margin: 'auto', textAlign: 'center', color:'#000', fontSize:'18px', justifyContent:'center' }}>"This profile is private because the user hasn't set it up yet."</div></div>;
 
   return (
     <div style={{ minHeight: '80vh', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 0, background: 'var(--bg)' }}>
