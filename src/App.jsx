@@ -752,7 +752,7 @@ function CommentModal({ open, onClose, post, user }) {
     <div className="modal-backdrop">
       <div className="modal-box" style={{ minWidth: 340, maxWidth: 420, padding: 0, overflow: 'hidden', maxHeight: '70vh'}}>
         <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16, maxHeight: 500, minHeight: 320 }}>
-          <div style={{ fontWeight: 700, fontSize: '1.15rem', marginBottom: 8 }}>Comments</div>
+          <div style={{ fontWeight: 700, fontSize: '1.15rem', marginBottom: 8, color: '#000' }}>Comments</div>
           <div
             style={{
               flex: 1,
@@ -774,7 +774,7 @@ function CommentModal({ open, onClose, post, user }) {
                   <Link to={c.user_id === user.id ? '/profile' : `/profile/${c.user_id}`} style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
                     <UserAvatar src={commentProfiles[c.user_id]?.avatar_url || c.user_pic} name={commentProfiles[c.user_id]?.name || c.user_name} size={32} />
                   </Link>
-                  <div style={{ flex: 1 }}>
+                  <div>
                     <Link to={c.user_id === user.id ? '/profile' : `/profile/${c.user_id}`} style={{ fontWeight: 600, color: '#222', textAlign:'left', fontSize: 14, textDecoration: 'none' }}>{commentProfiles[c.user_id]?.name || c.user_name}</Link>
                     <div style={{ color: '#888', textAlign:'left', fontSize: 12 }}>{new Date(c.created_at).toLocaleString()}</div>
                     <div style={{ color: '#222', textAlign:'left', fontSize: 15, marginTop: 2 }}>{c.content}</div>
